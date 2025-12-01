@@ -3,6 +3,8 @@ from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from datetime import datetime
+import logging
+from config import DATASET
 import os
 
 default_args = {
@@ -11,13 +13,11 @@ default_args = {
 }
 
 def upload_file_to_stage():
-    file_path = '/opt/airflow/dags/airline_dataset.csv'
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Файл не найден: {file_path}")
+    file_path = DATASET
     hook = SnowflakeHook(snowflake_conn_id='snowflake_default')
     sql = f"PUT file://{file_path} @AIRLINE_DB.RAW.MY_INT_STAGE AUTO_COMPRESS=FALSE OVERWRITE=TRUE;"
     hook.run(sql)
-    print("Файл загружен.")
+    logging.info('File upload complete')
 
 with DAG(
         dag_id='snowflake_main_pipeline',
