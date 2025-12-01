@@ -72,4 +72,4 @@ with DAG(
     )
 
     # Порядок выполнения
-    task_load_bulk >> task_proc_dwh >> task_proc_dm
+    task_upload >> task_load_bulk >> task_proc_dwh >> task_proc_dm
