@@ -1,0 +1,1 @@
+create or replace stream AIRLINE_DB.RAW.PASSANGERS_STREAM on table "AIRLINE_DB.RAW.PASSENGERS_RAW";
