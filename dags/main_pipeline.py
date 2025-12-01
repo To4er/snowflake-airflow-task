@@ -4,20 +4,24 @@ from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from datetime import datetime
 import logging
-from config import DATASET
-import os
+from airflow.sdk import task
+from common.config import DATASET, SCHEMA_RAW
+from common.sql_quries import PROC_DWH_TO_DM, PROC_RAW_TO_DWH, LOAD_BULK, upload_files
+from common.config import SCHEMA_UTILS
 
 default_args = {
     'owner': 'airflow',
     'conn_id': 'snowflake_default',
 }
 
+logger = logging.getLogger(__name__)
+
 def upload_file_to_stage():
     file_path = DATASET
     hook = SnowflakeHook(snowflake_conn_id='snowflake_default')
-    sql = f"PUT file://{file_path} @AIRLINE_DB.RAW.MY_INT_STAGE AUTO_COMPRESS=FALSE OVERWRITE=TRUE;"
+    sql = upload_files(file_path)
     hook.run(sql)
-    logging.info('File upload complete')
+    logger.info('File upload complete')
 
 with DAG(
         dag_id='snowflake_main_pipeline',
@@ -27,49 +31,32 @@ with DAG(
         catchup=False
 ) as dag:
 
-    task_upload = PythonOperator(
-        task_id='0_upload_to_stage',
-        python_callable=upload_file_to_stage
-    )
+    # Uploading files in stage
+    @task
+    def upload_to_stage():
+        upload_file_to_stage()
 
+
+    # Task 1: Stage -> Raw
     task_load_bulk = SQLExecuteQueryOperator(
-        task_id='1_load_bulk_file',
-        sql="""
-            COPY INTO AIRLINE_DB.RAW.PASSENGERS_RAW (
-                PASSENGER_ID, FIRST_NAME, LAST_NAME, GENDER, AGE, 
-                NATIONALITY, AIRPORT_NAME, AIRPORT_COUNTRY_CODE, COUNTRY_NAME, 
-                AIRPORT_CONTINENT, CONTINENTS, DEPARTURE_DATE, ARRIVAL_AIRPORT, 
-                PILOT_NAME, FLIGHT_STATUS, TICKET_TYPE, PASSENGER_STATUS
-            )
-            FROM (
-                SELECT 
-                    t.$2, t.$3, t.$4, t.$5, t.$6, t.$7, t.$8, t.$9, t.$10, 
-                    t.$11, t.$12, t.$13, t.$14, t.$15, t.$16, t.$17, t.$18
-                FROM @AIRLINE_DB.RAW.MY_INT_STAGE t
-            )
-            FILE_FORMAT = (
-                TYPE = 'CSV' 
-                SKIP_HEADER = 1 
-                FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-            )
-            ON_ERROR = 'CONTINUE'
-            FORCE = TRUE;
-        """
+        task_id='load_bulk_file',
+        sql=LOAD_BULK
     )
 
-    # Task 2: Процедура RAW -> DWH
+    # Task 2: Raw -> DWH
     task_proc_dwh = SQLExecuteQueryOperator(
-        task_id='2_process_to_dwh',
-        sql="CALL AIRLINE_DB.UTILS.PROC_RAW_TO_DWH();",
-        autocommit=True
+        task_id='process_to_dwh',
+        sql=PROC_RAW_TO_DWH,
+        autocommit=True,
+        hook_params={"schema": SCHEMA_UTILS}
     )
 
-    # Task 3: Процедура DWH -> DM
+    # Task 3: DWH -> DM
     task_proc_dm = SQLExecuteQueryOperator(
-        task_id='3_process_to_dm',
-        sql="CALL AIRLINE_DB.UTILS.PROC_DWH_TO_DM();",
-        autocommit=True
+        task_id='process_to_dm',
+        sql=PROC_DWH_TO_DM,
+        autocommit=True,
+        hook_params= {"schema": SCHEMA_UTILS}
     )
 
-    # Порядок выполнения
-    task_upload >> task_load_bulk >> task_proc_dwh >> task_proc_dm
+    upload_to_stage() >> task_load_bulk >> task_proc_dwh >> task_proc_dm
