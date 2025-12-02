@@ -3,23 +3,22 @@ from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from datetime import datetime
-import logging
 from airflow.sdk import task
-from common.config import DATASET, SCHEMA_RAW
-from common.sql_quries import PROC_DWH_TO_DM, PROC_RAW_TO_DWH, LOAD_BULK, upload_files
+from common.config import AIRLINE_DATA_PATH
+from common.sql_quries import PROC_DWH_TO_DM, PROC_RAW_TO_DWH, LOAD_BULK, UPLOAD_FILES
 from common.config import SCHEMA_UTILS
+from common.utils import logger
 
 default_args = {
     'owner': 'airflow',
     'conn_id': 'snowflake_default',
 }
 
-logger = logging.getLogger(__name__)
-
-def upload_file_to_stage():
-    file_path = DATASET
+def upload_file_to_stage_func(file_path: str):
+    file_path = file_path
     hook = SnowflakeHook(snowflake_conn_id='snowflake_default')
-    sql = upload_files(file_path)
+    sql = UPLOAD_FILES.format(file_path=file_path)
+    hook.run(sql)
     hook.run(sql)
     logger.info('File upload complete')
 
@@ -33,8 +32,8 @@ with DAG(
 
     # Uploading files in stage
     @task
-    def upload_to_stage():
-        upload_file_to_stage()
+    def upload_file_to_stage_task():
+        upload_file_to_stage_func(AIRLINE_DATA_PATH)
 
 
     # Task 1: Stage -> Raw
@@ -59,4 +58,4 @@ with DAG(
         hook_params= {"schema": SCHEMA_UTILS}
     )
 
-    upload_to_stage() >> task_load_bulk >> task_proc_dwh >> task_proc_dm
+    upload_file_to_stage_task() >> task_load_bulk >> task_proc_dwh >> task_proc_dm

@@ -1,5 +1,5 @@
 
-DATASET = '/opt/airflow/dags/airline_dataset.csv'
+AIRLINE_DATA_PATH = '/opt/airflow/dags/airline_dataset.csv'
 
 SCHEMA_RAW = 'RAW'
 SCHEMA_DWH = 'DWH'
