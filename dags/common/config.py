@@ -1,0 +1,12 @@
+
+AIRLINE_DATA_PATH = '/opt/airflow/dags/airline_dataset.csv'
+
+SCHEMA_RAW = 'RAW'
+SCHEMA_DWH = 'DWH'
+SCHEMA_DM = 'DM'
+SCHEMA_UTILS = 'UTILS'
+
+TABLE_RAW = f"{SCHEMA_RAW}.PASSENGERS_RAW"
+STAGE_NAME = f"@{SCHEMA_RAW}.MY_INT_STAGE"
+
+CONN_ID = "snowflake_default"
